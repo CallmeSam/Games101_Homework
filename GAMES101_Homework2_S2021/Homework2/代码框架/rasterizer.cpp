@@ -105,7 +105,60 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t) {
     auto v = t.toVector4();
-    
+    float minX = v[0].x;
+    float minY = v[0].y;
+    float minZ = v[0].z;
+    float maxX = v[0].x;
+    float maxY = v[0].y;
+    float maxZ = v[0].z;
+    for(i = 1; i < 3; i++)
+    {
+        minX = MIN(minX, v[i].x);
+        minY = MIN(minY, v[i].y);
+        minZ = MIN(minZ, v[i].z);
+        maxX = MAX(maxX, v[i].x);
+        maxY = MAX(maxY, v[i].y);
+        maxZ = MAX(maxZ, v[i].z);
+    }
+
+    minX = floor(minX);
+    minY = floor(minY);
+    minZ = floor(minZ);
+    maxX = ceil(maxX);
+    maxY = ceil(maxY);
+    maxZ = ceil(maxZ);
+
+    //v1---v2
+    //v4---v3
+    Eigen::Vector3f v1;
+    Eigen::Vector3f v2;
+    Eigen::Vector3f v3;
+    Eigen::Vector3f v4;
+    v1 = {minX, minY};
+    v2 = {maxX, minY};
+    v3 = {maxX, maxY};
+    v4 = {minX, maxY};
+
+    for(i = v1.x; i < v2.x; i++)
+    {
+        for(j = v1.y; j <= v2.y; j++)
+        {
+            auto[alpha, beta, gamma] = computeBarycentric2D(i + 0.5, j + 0.5, t.v);
+            if (alpha >= 0 && beta >= 0 && gamma >= 0)
+            {
+                float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                z_interpolated *= w_reciprocal;
+                int index = get_index(i, j);
+                depth_buf[index] = z_interpolated;
+                Eigen::Vector3f color;
+                color = t.color[0] * alpha + t.color[1] * beta + t.color[2] * gamma;
+                set_pixel(Eigen::Vector3f(i, j, z_interpolated), color);
+            }
+        }
+    }
+
+
     // TODO : Find out the bounding box of current triangle.
     // iterate through the pixel and find if the current pixel is inside the triangle
 
