@@ -149,7 +149,7 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
     return Vector4f(v3.x(), v3.y(), v3.z(), w);
 }
 
-static bool insideTriangle(int x, int y, const Vector4f* _v){
+static bool insideTriangle(int x, int y, const Vector4f* _v){ //没看懂
     Vector3f v[3];
     for(int i=0;i<3;i++)
         v[i] = {_v[i].x(),_v[i].y(), 1.0};
@@ -259,6 +259,68 @@ static Eigen::Vector2f interpolate(float alpha, float beta, float gamma, const E
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& view_pos) 
 {
+    //找到AABB
+    //遍历AABB
+     auto v = t.toVector4();
+    float minX = v[0].x;
+    float minY = v[0].y;
+    float maxX = v[0].x;
+    float maxY = v[0].y;
+    for(i = 1; i < 3; i++)
+    {
+        minX = MIN(minX, v[i].x);
+        minY = MIN(minY, v[i].y);
+        maxX = MAX(maxX, v[i].x);
+        maxY = MAX(maxY, v[i].y);
+    }
+
+    minX = floor(minX);
+    minY = floor(minY);
+    maxX = ceil(maxX);
+    maxY = ceil(maxY);
+
+    //v1---v2
+    //v4---v3
+    Eigen::Vector3f v1;
+    Eigen::Vector3f v2;
+    Eigen::Vector3f v3;
+    Eigen::Vector3f v4;
+    v1 = {minX, minY};
+    v2 = {maxX, minY};
+    v3 = {maxX, maxY};
+    v4 = {minX, maxY};
+
+    for(i = v1.x; i < v2.x; i++)
+    {
+        for(j = v1.y; j <= v2.y; j++)
+        {
+            auto[alpha, beta, gamma] = computeBarycentric2D(i + 0.5, j + 0.5, t.v);
+            if (alpha >= 0 && beta >= 0 && gamma >= 0)
+            {
+                float Z = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float zp = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                zp *= Z;
+                int index = get_index(i, j);
+                if (depth_buf[index] > zp)
+                {
+                    Eigen::Vector3f color;
+                    Eigen::Vector3f normal;
+                    Eigen::Vector2f texcoord;
+                    Eigen::Vector3f shading_coords;
+                    depth_buf[index] = zp;
+                    color = interpolate(alpha, beta, gamma, t.color[0], t.color[1], t.color[2], 1);
+                    normal = interpolate(alpha, beta, gamma, t.normal[0], t.normal[1], t.normal[2], 1);
+                    texcoord = interpolate(alpha, beta, gamma, t.tex_coords[0], t.tex_coords[1], t.tex_coords[2], 1);
+                    shading_coords = interpolate(alpha, beta, gamma, view_pos[0], view_pos[1], view_pos[2], 1);
+                    //把屏幕坐标转为世界坐标 重新计算法线？
+                    fragment_shader_payload payload( interpolated_color, interpolated_normal.normalized(), interpolated_texcoords, texture ? &*texture : nullptr);
+                    payload.view_pos = shading_coords;
+                    pixel_color = fragment_shader(payload);
+                    // set_pixel(Eigen::Vector3f(i, j, z_interpolated), color);
+                }
+            }
+        }
+    }
     // TODO: From your HW3, get the triangle rasterization code.
     // TODO: Inside your rasterization loop:
     //    * v[i].w() is the vertex view space depth value z.
