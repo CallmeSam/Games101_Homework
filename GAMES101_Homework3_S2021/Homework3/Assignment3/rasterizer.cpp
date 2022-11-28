@@ -150,17 +150,25 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
 }
 
 static bool insideTriangle(int x, int y, const Vector4f* _v){ //没看懂
-    Vector3f v[3];
-    for(int i=0;i<3;i++)
-        v[i] = {_v[i].x(),_v[i].y(), 1.0};
-    Vector3f f0,f1,f2;
-    f0 = v[1].cross(v[0]);
-    f1 = v[2].cross(v[1]);
-    f2 = v[0].cross(v[2]);
-    Vector3f p(x,y,1.);
-    if((p.dot(f0)*f0.dot(v[2])>0) && (p.dot(f1)*f1.dot(v[0])>0) && (p.dot(f2)*f2.dot(v[1])>0))
-        return true;
-    return false;
+    Eigen::Vector3f A = { _v->x(), _v->y(), 1 };
+    Eigen::Vector3f B = { (_v + 1)->x(), (_v + 1)->y(), 1 };
+    Eigen::Vector3f C = { (_v + 2)->x(), (_v + 2)->y(), 1 };
+    Eigen::Vector3f P = { float(x), float(y), 1.f };
+
+    Eigen::Vector3f AB = B - A;
+    Eigen::Vector3f BC = C - B;
+    Eigen::Vector3f CA = A - C;
+    Eigen::Vector3f AP = P - A;
+    Eigen::Vector3f BP = P - B;
+    Eigen::Vector3f CP = P - C;
+
+    Eigen::Vector3f c1 = AB.cross(AP);
+    Eigen::Vector3f c2 = BC.cross(BP);
+    Eigen::Vector3f c3 = CA.cross(CP);
+    if (c1.z() * c2.z() < 0 || c1.z() * c3.z() < 0)
+        return false;
+
+    return true;
 }
 
 static std::tuple<float, float, float> computeBarycentric2D(float x, float y, const Vector4f* v){
@@ -259,19 +267,34 @@ static Eigen::Vector2f interpolate(float alpha, float beta, float gamma, const E
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eigen::Vector3f, 3>& view_pos) 
 {
+    /*for (int i = 0; i < 3; i++)
+    {*/
+    
+        //线框模式
+        //draw_line(t.v[0].head<3>(), t.v[1].head<3>());
+        //draw_line(t.v[1].head<3>(), t.v[2].head<3>());
+        //draw_line(t.v[2].head<3>(), t.v[0].head<3>());
+    //}
+    
+    
+    /*static bool drawPixel = true;
+    if (!drawPixel)
+        return;*/
+
+    //drawPixel = false;
     //找到AABB
     //遍历AABB
      auto v = t.toVector4();
-    float minX = v[0].x;
-    float minY = v[0].y;
-    float maxX = v[0].x;
-    float maxY = v[0].y;
-    for(i = 1; i < 3; i++)
+    float minX = v[0].x();
+    float minY = v[0].y();
+    float maxX = v[0].x();
+    float maxY = v[0].y();
+    for(int i = 1; i < 3; i++)
     {
-        minX = MIN(minX, v[i].x);
-        minY = MIN(minY, v[i].y);
-        maxX = MAX(maxX, v[i].x);
-        maxY = MAX(maxY, v[i].y);
+        minX = MIN(minX, v[i].x());
+        minY = MIN(minY, v[i].y());
+        maxX = MAX(maxX, v[i].x());
+        maxY = MAX(maxY, v[i].y());
     }
 
     minX = floor(minX);
@@ -285,42 +308,68 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t, const std::array<Eig
     Eigen::Vector3f v2;
     Eigen::Vector3f v3;
     Eigen::Vector3f v4;
-    v1 = {minX, minY};
-    v2 = {maxX, minY};
-    v3 = {maxX, maxY};
-    v4 = {minX, maxY};
+    v1 = {minX, minY, 1.f};
+    v2 = {maxX, minY, 1.f };
+    v3 = {maxX, maxY, 1.f };
+    v4 = {minX, maxY, 1.f };
 
-    for(i = v1.x; i < v2.x; i++)
+    for(int i = v1.x(); i < v2.x(); i++)
     {
-        for(j = v1.y; j <= v2.y; j++)
+        for(int j = v1.y(); j <= v3.y(); j++)
         {
-            auto[alpha, beta, gamma] = computeBarycentric2D(i + 0.5, j + 0.5, t.v);
-            if (alpha >= 0 && beta >= 0 && gamma >= 0)
+           
+            if (insideTriangle(i, j, t.v))
             {
-                float Z = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
-                float zp = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
-                zp *= Z;
-                int index = get_index(i, j);
-                if (depth_buf[index] > zp)
-                {
-                    Eigen::Vector3f color;
-                    Eigen::Vector3f normal;
-                    Eigen::Vector2f texcoord;
-                    Eigen::Vector3f shading_coords;
-                    depth_buf[index] = zp;
-                    color = interpolate(alpha, beta, gamma, t.color[0], t.color[1], t.color[2], 1);
-                    normal = interpolate(alpha, beta, gamma, t.normal[0], t.normal[1], t.normal[2], 1);
-                    texcoord = interpolate(alpha, beta, gamma, t.tex_coords[0], t.tex_coords[1], t.tex_coords[2], 1);
-                    shading_coords = interpolate(alpha, beta, gamma, view_pos[0], view_pos[1], view_pos[2], 1);
-                    //把屏幕坐标转为世界坐标 重新计算法线？
-                    fragment_shader_payload payload( interpolated_color, interpolated_normal.normalized(), interpolated_texcoords, texture ? &*texture : nullptr);
-                    payload.view_pos = shading_coords;
-                    pixel_color = fragment_shader(payload);
-                    // set_pixel(Eigen::Vector3f(i, j, z_interpolated), color);
-                }
+                /*if (!drawPixel)
+                    drawPixel = true;*/
+                auto tup = computeBarycentric2D(i + 0.5, j + 0.5, t.v);
+                auto alpha = std::get<0>(tup);
+                auto beta = std::get<1>(tup);
+                auto gamma = std::get<2>(tup);
+         /*       if (alpha >= 0 && beta >= 0 && gamma >= 0)
+                {*/
+                    float Z = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                    float zp = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                    zp *= Z;
+                    int index = get_index(i, j);
+                    if (depth_buf[index] > zp)
+                    {
+                        Eigen::Vector3f color;
+                        Eigen::Vector3f normal;
+                        Eigen::Vector2f texcoord;
+                        Eigen::Vector3f shading_coords;
+                        depth_buf[index] = zp;
+                        color = interpolate(alpha, beta, gamma, t.color[0], t.color[1], t.color[2], 1);
+                        normal = interpolate(alpha, beta, gamma, t.normal[0], t.normal[1], t.normal[2], 1);
+                        texcoord = interpolate(alpha, beta, gamma, t.tex_coords[0], t.tex_coords[1], t.tex_coords[2], 1);
+                        shading_coords = interpolate(alpha, beta, gamma, view_pos[0], view_pos[1], view_pos[2], 1);
+                        //把屏幕坐标转为世界坐标 重新计算法线？
+                        fragment_shader_payload payload(color, normal.normalized(), texcoord, texture ? &*texture : nullptr);
+                        payload.view_pos = shading_coords;
+                        set_pixel(Eigen::Vector2i(i, j), fragment_shader(payload));
+                    }
+                //}
             }
         }
     }
+
+    //if (!drawPixel)
+    //{
+    //    for (int i = v1.x(); i < v2.x(); i++)
+    //    {
+    //        for (int j = v1.y(); j <= v2.y(); j++)
+    //        {
+    //            set_pixel(Eigen::Vector2i(i, j), Eigen::Vector3f(255, 0, 0));
+    //        }
+    //    }
+    //    //线框模式
+    //    draw_line(t.v[0].head<3>(), t.v[1].head<3>());
+    //    draw_line(t.v[1].head<3>(), t.v[2].head<3>());
+    //    draw_line(t.v[2].head<3>(), t.v[0].head<3>());
+    //}
+
+    
+
     // TODO: From your HW3, get the triangle rasterization code.
     // TODO: Inside your rasterization loop:
     //    * v[i].w() is the vertex view space depth value z.
