@@ -32,16 +32,58 @@ void naive_bezier(const std::vector<cv::Point2f> &points, cv::Mat &window)
 
 cv::Point2f recursive_bezier(const std::vector<cv::Point2f> &control_points, float t) 
 {
-    // TODO: Implement de Casteljau's algorithm
-    return cv::Point2f();
+    std::vector<cv::Point2f> new_control_points;
+    for (int i = 0; i < control_points.size() - 1; i++)
+    {
+        cv::Point2f p0 = control_points[i];
+        cv::Point2f p1 = control_points[i + 1];
+        new_control_points.push_back(p0 + (p1 - p0) * t);
+    }
 
+    if (new_control_points.size() > 1)
+    {
+        return recursive_bezier(new_control_points, t);
+    }
+    else
+    {
+        return new_control_points[0];
+    }
 }
 
 void bezier(const std::vector<cv::Point2f> &control_points, cv::Mat &window) 
 {
     // TODO: Iterate through all t = 0 to t = 1 with small steps, and call de Casteljau's 
     // recursive Bezier algorithm.
+    double v = sqrt(2) / 2 * 3;
+    for (double t = 0.0; t <= 1.0; t += 0.001)
+    {
+        auto point = recursive_bezier(control_points, t);
+        for (int i = - 1; i <= 1; i++)
+        {
+            for (int j = - 1; j <= 1; j++)
+            {
+                cv::Point2f midPoint(int(point.x + i), int(point.y + j));
+                double length = sqrt(pow(midPoint.x - point.x + 0.5, 2) + pow(midPoint.y - point.y + 0.5, 2));
+                /*double length2 = sqrt(pow(point.y - int(point.y + j) - 0.5, 2) + pow(point.x - int(point.x + i) - 0.5, 2));
+                if (length != length2)
+                {
+                    printf("");
+                }*/
 
+                window.at<cv::Vec3b>(point.y + j, point.x + i)[1] = std::fmax(window.at<cv::Vec3b>(point.y + j, point.x + i)[1], (1 - length / v) * 255); //根据一个点做模糊
+                
+
+
+                //float ratio = 1 - sqrt(2) * sqrt(pow(point.y - int(point.y + j) - 0.5, 2) + pow(point.x - int(point.x + i) - 0.5, 2)) / 3;//计算ratio
+
+                //window.at<cv::Vec3b>(point.y + j, point.x + i)[1] = std::fmax(window.at<cv::Vec3b>(point.y + j, point.x + i)[1], 255 * ratio);//计算像素颜色
+
+            }
+        }
+        //sqrt(2)* sqrt(pow(points1[0].y - int(points1[0].y + j) - 0.5, 2) + pow(points1[0].x - int(points1[0].x + i) - 0.5, 2)) / 3;
+
+        //window.at<cv::Vec3b>(point.y, point.x)[1] = 255;
+    }
 }
 
 int main() 
@@ -62,8 +104,8 @@ int main()
 
         if (control_points.size() == 4) 
         {
-            naive_bezier(control_points, window);
-            //   bezier(control_points, window);
+            //naive_bezier(control_points, window);
+               bezier(control_points, window);
 
             cv::imshow("Bezier Curve", window);
             cv::imwrite("my_bezier_curve.png", window);

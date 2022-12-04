@@ -105,6 +105,29 @@ Eigen::Vector3f texture_fragment_shader(const fragment_shader_payload& payload)
     Eigen::Vector3f return_color = { 0, 0, 0 };
     if (payload.texture)
     {
+        /*float width = payload.texture->width;
+        float height = payload.texture->height;
+        float x = payload.tex_coords.x();
+        float y = payload.tex_coords.y();
+        int texCoordX = x * width;
+        int texCoordY = y * height;
+        int signX = texCoordY - int(texCoordX) > 0.5f ? 1 : -1;
+        int signY = texCoordY - int(texCoordY) > 0.5f ? 1 : -1;
+        Eigen::Vector2f coordlt = { signX > 0 ? texCoordX : texCoordX + signX, signY > 0 ? texCoordY : texCoordY  + signY};
+        Eigen::Vector2f coordrt = { signX < 0 ? texCoordX : texCoordX + signX, signY > 0 ? texCoordY : texCoordY + signY };
+        Eigen::Vector2f coordlb = { signX > 0 ? texCoordX : texCoordX + signX, signY < 0 ? texCoordY : texCoordY + signY };
+        Eigen::Vector2f coordrb = { signX < 0 ? texCoordX : texCoordX + signX, signY < 0 ? texCoordY : texCoordY + signY };
+        Eigen::Vector3f colorlt = payload.texture->getColor(MIN(MAX(coordlt.x() / width, 0), 0.999f), MIN(MAX(coordlt.y() / height, 0), 0.999f));
+        Eigen::Vector3f colorrt = payload.texture->getColor(MIN(MAX(coordrt.x() / width, 0), 0.999f), MIN(MAX(coordrt.y() / height, 0), 0.999f));
+        Eigen::Vector3f colorlb = payload.texture->getColor(MIN(MAX(coordlb.x() / width, 0), 0.999f), MIN(MAX(coordlb.y() / height, 0), 0.999f));
+        Eigen::Vector3f colorrb = payload.texture->getColor(MIN(MAX(coordrb.x() / width, 0), 0.999f), MIN(MAX(coordrb.y() / height, 0), 0.999f));
+        float t1 = (texCoordX - coordlt.x() - 0.5f) / 1;
+        Eigen::Vector3f color1 = (1 - t1) * colorlt + t1 * colorrt;
+        Eigen::Vector3f color2 = (1 - t1) * colorlb + t1 * colorrb;
+        float t2 = (texCoordY - coordlt.y() - 0.5f) / 1;
+        return_color = (1 - t2) * color1 + t2 * color2;*/  //Ë«ÏßÐÔ²îÖµ
+
+
         // TODO: Get the texture value at the texture coordinates of the current fragment
         return_color = payload.texture->getColor(MIN(MAX(payload.tex_coords.x(), 0), 0.999f), MIN(MAX(payload.tex_coords.y(), 0), 0.999f));
     }
@@ -377,10 +400,10 @@ int main(int argc, const char** argv)
 
     rst::rasterizer r(700, 700);
 
-    auto texture_path = "hmap.jpg";//"spot_texture.png";
+    auto texture_path = "spot_texture.png";//"hmap.jpg";
     r.set_texture(Texture(obj_path + texture_path));
 
-    std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = displacement_fragment_shader;
+    std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = texture_fragment_shader;
 
     if (argc >= 2)
     {
